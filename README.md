@@ -20,6 +20,7 @@
 Прошивки лежат в папке Firmware. 
 - Пульт [tank_remote_control_transmitter](https://github.com/AbramtsevFV/Arduino-nrf24l01--rc-tank/tree/main/Firmware/tank_remote_control_transmitter).
 - Танк [tank_motor_receiver](https://github.com/AbramtsevFV/Arduino-nrf24l01--rc-tank/tree/main/Firmware/tank_motor_receiver)
+Все 3d модели печатались пластиком PLA.
 
  ## Фото готового проекта 
  <div align="center">
