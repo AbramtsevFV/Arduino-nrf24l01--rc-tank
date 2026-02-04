@@ -3,6 +3,7 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 #include <Servo.h>
+#include <SoftPWM.h>
 
 
 
@@ -22,8 +23,14 @@ byte address[][6] = {"1Node", "2Node", "3Node", "4Node", "5Node", "6Node"}; //в
 
 // создаём servo 
 Servo servo;
-
 byte SERV_PIN = 6;
+
+// Создаём лед
+unsigned long lastUpdate = 0;
+#define GREEN_PIN 7
+void blink_led(bool flag = true);
+unsigned long lastSignalTime = 0;
+const unsigned long SIGNAL_TIMEOUT = 200; // 200ms
 
 short recieved_data[3];  // массив принятых данных
 
@@ -57,14 +64,16 @@ void setup() {
 
   // настройка servo
   servo.attach(SERV_PIN);
-  Serial.println("recieved_data[2]");
-
+  SoftPWMBegin();
+  SoftPWMSet(GREEN_PIN, 0);
+  
 
 }
 
 void loop() {
   byte pipeNo;
   while ( radio.available(&pipeNo)) { // есть входящие данные
+     lastSignalTime = millis();
     // чиатем входящий сигнал
     radio.read(&recieved_data, sizeof(recieved_data));
 
@@ -77,10 +86,60 @@ void loop() {
     int new_pos = recieved_data[2];
     servo.write(new_pos);
 
+   
+    blink_led(false); 
 
-    Serial.println(recieved_data[2]);
+    //Serial.println(recieved_data[2]);
     //Serial.println(recieved_data[1]);
     //Serial.println(recieved_data[0]);
   }
+
+   if (millis() - lastSignalTime > SIGNAL_TIMEOUT){
+      // Время отключения сигдлнала для избежания ложных срабатываний
+      blink_led();
+      // защита для моторов 
+      motor_R.setSpeed(0);
+      motor_L.setSpeed(0);
+   }
+
+}
+
+
+void blink_led(bool flag = true  ){
+// Отвечает за мигание светодиодом в моменты простоя
+if (millis() - lastUpdate >= 20) { // 50 FPS
+    float val;
+    lastUpdate = millis();
+
+    if(flag){
+      // Синусоидальное дыхание (гладкое)
+      val = (exp(sin(millis() / 2000.0 * PI)) - 0.36787944) * 108.0;
+    }
+    else{
+      val = getSpeedEffect();
+    }
+    SoftPWMSet(GREEN_PIN, int(val));
+}
+
+}
+
+
+int getSpeedEffect() {
+  // Получаем текущую скорость
+  int speed = max(abs(recieved_data[0]), abs(recieved_data[1]));
   
+    if (speed > 200) {
+    // Быстрое мигание на максимальной скорости
+    return (millis() % 100 < 50) ? 255 : 0;
+
+  } else if (speed > 100) {
+    // Среднее мигание на средней скорости
+    return (millis() % 200 < 100) ? 255 : 100;
+
+  } else {
+    // Постоянный свет на низкой скорости
+    return map(speed, 0, 100, 50, 150);
+  }
+  
+   
 }
