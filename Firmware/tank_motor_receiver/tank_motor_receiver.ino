@@ -3,7 +3,7 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 #include <Servo.h>
-#include <SoftPWM.h>
+//#include <SoftPWM.h>
 
 
 
@@ -16,6 +16,7 @@ byte motor_l_PWM_pin = 3; //5
 
 GMotor motor_R(DRIVER2WIRE, motor_r_dig_pin, motor_r_PWM_pin);
 GMotor motor_L(DRIVER2WIRE, motor_l_dig_pin, motor_l_PWM_pin);
+
 
 // Создаём приёмник
 RF24 radio(9, 10);  // "создать" модуль на пинах 9 и 10 Для Уно
@@ -31,6 +32,16 @@ unsigned long lastUpdate = 0;
 void blink_led(bool flag = true);
 unsigned long lastSignalTime = 0;
 const unsigned long SIGNAL_TIMEOUT = 200; // 200ms
+
+// временно 
+// будет заменено на шим когда прийдёт PCA9685PW 
+ void airBlink();
+unsigned long previousMicros = 0;
+const long pwmInterval = 100; // Период ШИМ в микросекундах
+int dutyCycle = 0; // Заполнение 0-100
+int breathDirection = 1;
+unsigned long breathTimer = 0;
+const long breathInterval = 50; // Обновление дыхания каждые 50ms
 
 short recieved_data[3];  // массив принятых данных
 
@@ -64,8 +75,9 @@ void setup() {
 
   // настройка servo
   servo.attach(SERV_PIN);
-  SoftPWMBegin();
-  SoftPWMSet(GREEN_PIN, 0);
+  pinMode(GREEN_PIN, OUTPUT);
+  //SoftPWMBegin();
+  //SoftPWMSet(GREEN_PIN, 0);
   
 
 }
@@ -80,23 +92,26 @@ void loop() {
     // управляем моторами
     motor_R.setSpeed(recieved_data[0]);
     motor_L.setSpeed(recieved_data[1]);
-
+   
     //управляем servo
  
     int new_pos = recieved_data[2];
     servo.write(new_pos);
 
    
-    blink_led(false); 
+    //blink_led(false); 
 
+    digitalWrite(GREEN_PIN, millis() % 500 > 250);
+    
     //Serial.println(recieved_data[2]);
-    //Serial.println(recieved_data[1]);
-    //Serial.println(recieved_data[0]);
+    Serial.println(recieved_data[1]);
+    Serial.println(recieved_data[0]);
   }
 
    if (millis() - lastSignalTime > SIGNAL_TIMEOUT){
       // Время отключения сигдлнала для избежания ложных срабатываний
-      blink_led();
+      //blink_led();
+      airBlink();   // удалить
       // защита для моторов 
       motor_R.setSpeed(0);
       motor_L.setSpeed(0);
@@ -118,7 +133,7 @@ if (millis() - lastUpdate >= 20) { // 50 FPS
     else{
       val = getSpeedEffect();
     }
-    SoftPWMSet(GREEN_PIN, int(val));
+    //SoftPWMSet(GREEN_PIN, int(val));
 }
 
 }
@@ -141,5 +156,36 @@ int getSpeedEffect() {
     return map(speed, 0, 100, 50, 150);
   }
   
-   
-}
+   }
+
+   // Временно эта функция
+ void airBlink(){
+  unsigned long currentMicros = micros();
+  unsigned long currentMillis = millis();
+  
+  // Генерация программного ШИМ
+  if (currentMicros - previousMicros >= pwmInterval) {
+    previousMicros = currentMicros;
+    
+    static int pwmCounter = 0;
+    pwmCounter++;
+    if (pwmCounter >= 100) pwmCounter = 0;
+    
+    if (pwmCounter < dutyCycle) {
+      digitalWrite(GREEN_PIN, HIGH);
+    } else {
+      digitalWrite(GREEN_PIN, LOW);
+    }
+  }
+  
+  // Обновление эффекта дыхания
+  if (currentMillis - breathTimer >= breathInterval) {
+    breathTimer = currentMillis;
+    
+    dutyCycle += breathDirection;
+    
+    if (dutyCycle <= 0 || dutyCycle >= 100) {
+      breathDirection = -breathDirection;
+    }
+  }
+ }
