@@ -2,8 +2,10 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 
+#define BTN_DEB 50      // тай-маут смены состояния, мс
 //bool stop = false;
 const int POT = A2;   // Потенциометр для упраления башней
+const int BUTTON_PIN = 4;
 RF24 radio(9, 10); // "создать" модуль на пинах 9 и 10 Для Уно и нано
 
 byte address[][6] = {"1Node", "2Node", "3Node", "4Node", "5Node", "6Node"}; //возможные номера труб
@@ -13,14 +15,14 @@ const int X_PIN = A0;
 const int Y_PIN = A1;
 
 // Для отключения передатчика если данные не изменились и экономии энепгии
-short transmit_data[3];  // массив, хранящий передаваемые данные
-//short latest_data[2];    // массив, хранящий последние переданные данные
-//boolean flag;           // флажок отправки данных
+short transmit_data[4];  // массив, хранящий передаваемые данные
+
+void button_press();
 
 
 
 void setup() {
-  // put your setup code here, to run once:
+
   Serial.begin(9600);
 
   radio.begin();              // активировать модуль
@@ -39,11 +41,10 @@ void setup() {
 
   radio.powerUp();        //начать работу
   radio.stopListening();  //не слушаем радиоэфир, мы передатчик
-
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
 void loop() {
-
 
   //  Переводим Аналоговый 0 -1023 в - 255  +255 ШИМ
 
@@ -53,11 +54,26 @@ void loop() {
   // Преазуем значения в значения для управления
   int m_r = X + Y;
   int m_l = Y - X;
-
+  button_press();
   transmit_data[0] = m_r;
   transmit_data[1] = m_l;
   transmit_data[2] = map(analogRead(POT), 0, 1023, 0, 180);
   radio.write(&transmit_data, sizeof(transmit_data)); // отправить по радио
-  //Serial.println(m_r);
-  Serial.println(transmit_data[2]);
+  Serial.println(transmit_data[3]);
+}
+
+void button_press(){
+  static bool pState = false;
+    static uint32_t tmr;
+    bool state = !digitalRead(BUTTON_PIN);
+
+    if (pState != state) {
+        if (!tmr) tmr = millis();               // первое изменение
+        else if (millis() - tmr >= BTN_DEB) {   // вышел тайм-аут
+            pState = state;                     // запомнить состояние
+
+            if (state) transmit_data[3] = true;  // кнопка нажата
+            else transmit_data[3] = false;        // кнопка отпущена
+        }
+    } else tmr = 0;  // сброс
 }

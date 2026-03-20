@@ -3,7 +3,6 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 #include <Servo.h>
-//#include <SoftPWM.h>
 
 
 
@@ -29,21 +28,20 @@ byte SERV_PIN = 6;
 // Создаём лед
 unsigned long lastUpdate = 0;
 #define GREEN_PIN 7
-void blink_led(bool flag = true);
 unsigned long lastSignalTime = 0;
 const unsigned long SIGNAL_TIMEOUT = 200; // 200ms
 
 // временно 
 // будет заменено на шим когда прийдёт PCA9685PW 
- void airBlink();
+void airBlink();
 unsigned long previousMicros = 0;
 const long pwmInterval = 100; // Период ШИМ в микросекундах
 int dutyCycle = 0; // Заполнение 0-100
 int breathDirection = 1;
 unsigned long breathTimer = 0;
-const long breathInterval = 50; // Обновление дыхания каждые 50ms
+const long breathInterval = 20; // Обновление дыхания каждые 20ms
 
-short recieved_data[3];  // массив принятых данных
+short recieved_data[4];  // массив принятых данных
 
 
 void setup() {
@@ -76,9 +74,9 @@ void setup() {
   // настройка servo
   servo.attach(SERV_PIN);
   pinMode(GREEN_PIN, OUTPUT);
-  //SoftPWMBegin();
-  //SoftPWMSet(GREEN_PIN, 0);
-  
+
+  pinMode(A1, OUTPUT);
+
 
 }
 
@@ -97,21 +95,18 @@ void loop() {
  
     int new_pos = recieved_data[2];
     servo.write(new_pos);
-
-   
-    //blink_led(false); 
-
+    
+    //управление лазером
+    digitalWrite(A1, recieved_data[3]);
+    
+    //управление индикацией наличия радиосигнала
     digitalWrite(GREEN_PIN, millis() % 500 > 250);
     
-    //Serial.println(recieved_data[2]);
-    Serial.println(recieved_data[1]);
-    Serial.println(recieved_data[0]);
   }
 
    if (millis() - lastSignalTime > SIGNAL_TIMEOUT){
       // Время отключения сигдлнала для избежания ложных срабатываний
-      //blink_led();
-      airBlink();   // удалить
+      airBlink();   
       // защита для моторов 
       motor_R.setSpeed(0);
       motor_L.setSpeed(0);
@@ -120,72 +115,35 @@ void loop() {
 }
 
 
-void blink_led(bool flag = true  ){
-// Отвечает за мигание светодиодом в моменты простоя
-if (millis() - lastUpdate >= 20) { // 50 FPS
-    float val;
-    lastUpdate = millis();
 
-    if(flag){
-      // Синусоидальное дыхание (гладкое)
-      val = (exp(sin(millis() / 2000.0 * PI)) - 0.36787944) * 108.0;
-    }
-    else{
-      val = getSpeedEffect();
-    }
-    //SoftPWMSet(GREEN_PIN, int(val));
-}
-
-}
-
-
-int getSpeedEffect() {
-  // Получаем текущую скорость
-  int speed = max(abs(recieved_data[0]), abs(recieved_data[1]));
-  
-    if (speed > 200) {
-    // Быстрое мигание на максимальной скорости
-    return (millis() % 100 < 50) ? 255 : 0;
-
-  } else if (speed > 100) {
-    // Среднее мигание на средней скорости
-    return (millis() % 200 < 100) ? 255 : 100;
-
-  } else {
-    // Постоянный свет на низкой скорости
-    return map(speed, 0, 100, 50, 150);
-  }
-  
-   }
-
-   // Временно эта функция
+   
  void airBlink(){
-  unsigned long currentMicros = micros();
-  unsigned long currentMillis = millis();
-  
-  // Генерация программного ШИМ
-  if (currentMicros - previousMicros >= pwmInterval) {
-    previousMicros = currentMicros;
+    unsigned long currentMicros = micros();
+    unsigned long currentMillis = millis();
     
-    static int pwmCounter = 0;
-    pwmCounter++;
-    if (pwmCounter >= 100) pwmCounter = 0;
-    
-    if (pwmCounter < dutyCycle) {
-      digitalWrite(GREEN_PIN, HIGH);
-    } else {
-      digitalWrite(GREEN_PIN, LOW);
+    // Генерация программного ШИМ
+    if (currentMicros - previousMicros >= pwmInterval) {
+      previousMicros = currentMicros;
+      
+      static int pwmCounter = 0;
+      pwmCounter++;
+      if (pwmCounter >= 100) pwmCounter = 0;
+      
+      if (pwmCounter < dutyCycle) {
+        digitalWrite(GREEN_PIN, HIGH);
+      } else {
+        digitalWrite(GREEN_PIN, LOW);
+      }
     }
-  }
-  
-  // Обновление эффекта дыхания
-  if (currentMillis - breathTimer >= breathInterval) {
-    breathTimer = currentMillis;
     
-    dutyCycle += breathDirection;
-    
-    if (dutyCycle <= 0 || dutyCycle >= 100) {
-      breathDirection = -breathDirection;
+    // Обновление эффекта дыхания
+    if (currentMillis - breathTimer >= breathInterval) {
+      breathTimer = currentMillis;
+      
+      dutyCycle += breathDirection;
+      
+      if (dutyCycle <= 0 || dutyCycle >= 100) {
+        breathDirection = -breathDirection;
+      }
     }
-  }
  }
